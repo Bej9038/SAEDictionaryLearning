@@ -3,9 +3,12 @@ import torch
 import torchaudio
 from torch.utils.data import Dataset, DataLoader
 import os
+import einops
 
 
 def convert_audio(wav: torch.Tensor, from_rate: float) -> torch.Tensor:
+    if wav.shape[0] == 1:
+        wav = einops.repeat(wav, '1 w -> 2 w')
     wav = julius.resample_frac(wav, int(from_rate), 48000)
     return wav
 
