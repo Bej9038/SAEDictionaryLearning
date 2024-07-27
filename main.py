@@ -44,8 +44,8 @@ class SparseAutoencoder(nn.Module):
 
 class Trainer:
     def __init__(self):
-        self.device = "cpu"
-        # self.device = 0
+        # self.device = "cpu"
+        self.device = 0
         self.latent_dim = 12000
         self.features = 2 ** 17
         self.lambda_sparsity = 5
@@ -58,10 +58,10 @@ class Trainer:
 
         self.encoder = AGC.from_pretrained("Audiogen/agc-discrete").to(self.device)
         self.sae = SparseAutoencoder(self.latent_dim, self.features, self.lambda_sparsity).to(self.device)
-        print(f"SAE Parameters: {self.latent_dim * self.features * 2}")
         self.optimizer = optim.Adam(self.sae.parameters(), lr=self.lr, betas=(0.9, 0.999), fused=True)
         self.dataloader = utils.get_dataloader(self.batch_size)
         self.scheduler = utils.CustomLRScheduler(self.optimizer, self.steps)
+        print(f"SAE Parameters: {self.latent_dim * self.features * 2}")
 
 
     def train(self):
