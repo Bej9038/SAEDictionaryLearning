@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.init as init
 import torch.optim as optim
 import utils
 from agc import AGC
@@ -15,6 +16,21 @@ class SparseAutoencoder(nn.Module):
         self.lambda_sparsity = lambda_sparsity
         self.mse_loss = nn.MSELoss()
 
+    def _initialize_weights(self):
+        # Initialize biases to zeros
+        init.zeros_(self.decoder.bias)
+        init.zeros_(self.encoder.bias)
+
+        # Initialize W_d
+        W_d = torch.randn(self.decoder.weight.size())
+        W_d_norm = torch.norm(W_d, dim=0)
+        W_d = W_d / W_d_norm * torch.rand(1).item() * 0.9 + 0.1  # Random L2 norm between 0.1 and 1
+
+        self.decoder.weight.data = W_d
+
+        # Initialize W_e to W_d.T
+        self.encoder.weight.data = W_d.T
+
     def forward(self, x):
         encoded = torch.relu(self.encoder(x))
         decoded = self.decoder(encoded)
@@ -29,6 +45,7 @@ class SparseAutoencoder(nn.Module):
 class Trainer:
     def __init__(self):
         self.device = "cpu"
+        # self.device = 0
         self.latent_dim = 12000
         self.features = 2 ** 17
         self.lambda_sparsity = 5
@@ -44,6 +61,8 @@ class Trainer:
         print(f"SAE Parameters: {self.latent_dim * self.features * 2}")
         self.optimizer = optim.Adam(self.sae.parameters(), lr=self.lr, betas=(0.9, 0.999), fused=True)
         self.dataloader = utils.get_dataloader(self.batch_size)
+        self.scheduler = utils.CustomLRScheduler(self.optimizer, self.steps)
+
 
     def train(self):
         self.sae.train()
@@ -66,7 +85,9 @@ class Trainer:
                     loss.backward()
                     torch.nn.utils.clip_grad_norm_(self.sae.parameters(), 1.0)
                     print(loss)
+
                     self.optimizer.step()
+                    self.scheduler.step()
 
                     step += 1
                     pbar.update(1)
