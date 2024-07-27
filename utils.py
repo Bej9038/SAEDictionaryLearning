@@ -49,5 +49,5 @@ def safe_collate(batch):
 
 def get_dataloader(bs):
     dataset = AudioDataset()
-    loader = DataLoader(dataset, batch_size=bs, collate_fn=safe_collate, shuffle=True, num_workers=6)
+    loader = DataLoader(dataset, batch_size=bs, collate_fn=safe_collate, shuffle=True, num_workers=1)
     return loader

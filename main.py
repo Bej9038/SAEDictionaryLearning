@@ -4,6 +4,7 @@ import torch.optim as optim
 import utils
 from agc import AGC
 from tqdm import tqdm
+import einops
 
 
 class SparseAutoencoder(nn.Module):
@@ -21,24 +22,20 @@ class SparseAutoencoder(nn.Module):
 
     def compute_loss(self, x, x_hat, fx):
         l2 = self.mse_loss(x, x_hat)
-        # l1 = 0
-        # for i in range(len(fx)):
-        #     l1 += self.lambda_sparsity * torch.abs(fx[i]) * torch.norm(self.decoder[:, i])
-        #
-        l1 = self.lambda_sparsity * torch.sum(torch.abs(fx) * torch.norm(self.decoder.weight, dim=1))
+        l1 = self.lambda_sparsity * torch.sum(torch.abs(fx) * torch.norm(self.decoder.weight, dim=0))
         return l1 + l2
 
 
 class Trainer:
     def __init__(self):
         self.device = "cpu"
-        self.latent_dim = 256
+        self.latent_dim = 12000
         self.features = 2 ** 17
         self.lambda_sparsity = 5
 
         # create LR schedule
         self.lr = 5e-5
-        self.batch_size = 128
+        self.batch_size = 2
         self.grad_norm = 1
         self.steps = 200000
 
@@ -58,22 +55,21 @@ class Trainer:
                     print(f"batch size: {batch.shape}")
                     batch = batch.to(self.device)
                     self.optimizer.zero_grad()
-                    inputs = self.encoder.encode(batch)
-                    print(inputs.shape)
+                    inputs = self.encoder.encode(batch).to(torch.float32)
+                    inputs = einops.rearrange(inputs, 'b h w -> b (h w)')
+                    print(f"input size: {inputs.shape}")
+
                     encoded, decoded = self.sae(inputs)
+
+                    print("computing loss")
                     loss = self.sae.compute_loss(inputs, decoded, encoded)
                     loss.backward()
                     torch.nn.utils.clip_grad_norm_(self.sae.parameters(), 1.0)
-
+                    print(loss)
                     self.optimizer.step()
-                    epoch_loss += loss.item()
 
                     step += 1
                     pbar.update(1)
-
-                    if step % 100 == 0:
-                        pbar.set_postfix(loss=epoch_loss/100)
-                        epoch_loss = 0
 
                     if step >= self.steps:
                         break
