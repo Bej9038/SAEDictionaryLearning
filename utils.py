@@ -1,9 +1,11 @@
 import julius
 import torch
+import torch.nn.functional as F
 import torchaudio
 from torch.utils.data import Dataset, DataLoader
 import os
 import einops
+from torch.utils.data.dataloader import default_collate
 
 
 def convert_audio(wav: torch.Tensor, from_rate: float) -> torch.Tensor:
@@ -27,12 +29,25 @@ class AudioDataset(Dataset):
 
     def __getitem__(self, idx):
         audio_path = self.audio_files[idx]
-        waveform, sample_rate = torchaudio.load(audio_path)
+        try:
+            waveform, sample_rate = torchaudio.load(audio_path)
+            print(f"File loaded")
+        except Exception as e:
+            print(f"Error loading file: {e}")
+            return None
         waveform = convert_audio(waveform, sample_rate)
+
+        padding = (0, 480000 - waveform.size(-1))
+        waveform = F.pad(waveform, padding, "constant", 0)
         return waveform
+
+
+def safe_collate(batch):
+    batch = list(filter(lambda x: x is not None, batch))
+    return default_collate(batch)
 
 
 def get_dataloader(bs):
     dataset = AudioDataset()
-    loader = DataLoader(dataset, batch_size=bs, shuffle=True, num_workers=4)
+    loader = DataLoader(dataset, batch_size=bs, collate_fn=safe_collate, shuffle=True, num_workers=6)
     return loader

@@ -31,17 +31,19 @@ class SparseAutoencoder(nn.Module):
 
 class Trainer:
     def __init__(self):
-
+        self.device = "cpu"
         self.latent_dim = 256
         self.features = 2 ** 17
         self.lambda_sparsity = 5
+
+        # create LR schedule
         self.lr = 5e-5
-        self.batch_size = 2048
+        self.batch_size = 128
         self.grad_norm = 1
         self.steps = 200000
 
-        self.encoder = AGC.from_pretrained("Audiogen/agc-discrete").to(0)
-        self.sae = SparseAutoencoder(self.latent_dim, self.features, self.lambda_sparsity)
+        self.encoder = AGC.from_pretrained("Audiogen/agc-discrete").to(self.device)
+        self.sae = SparseAutoencoder(self.latent_dim, self.features, self.lambda_sparsity).to(self.device)
         print(f"SAE Parameters: {self.latent_dim * self.features * 2}")
         self.optimizer = optim.Adam(self.sae.parameters(), lr=self.lr, betas=(0.9, 0.999), fused=True)
         self.dataloader = utils.get_dataloader(self.batch_size)
@@ -53,8 +55,11 @@ class Trainer:
         with tqdm(total=self.steps) as pbar:
             while step < self.steps:
                 for batch in self.dataloader:
-                    inputs = batch[0]
+                    print(f"batch size: {batch.shape}")
+                    batch = batch.to(self.device)
                     self.optimizer.zero_grad()
+                    inputs = self.encoder.encode(batch)
+                    print(inputs.shape)
                     encoded, decoded = self.sae(inputs)
                     loss = self.sae.compute_loss(inputs, decoded, encoded)
                     loss.backward()
