@@ -8,6 +8,14 @@ import einops
 from torch.utils.data.dataloader import default_collate
 from torch.optim.lr_scheduler import _LRScheduler
 import math
+from torch.utils.data.distributed import DistributedSampler
+from torch.distributed import init_process_group
+
+
+def ddp_setup(rank, world_size):
+    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_PORT"] = "12355"
+    init_process_group(backend="nccl", rank=rank, world_size=world_size)
 
 
 def convert_audio(wav: torch.Tensor, from_rate: float) -> torch.Tensor:
@@ -19,7 +27,7 @@ def convert_audio(wav: torch.Tensor, from_rate: float) -> torch.Tensor:
 
 class AudioDataset(Dataset):
     def __init__(self, ):
-        self.directory = "D:\\Dictionary Learning Dataset"
+        self.directory = "E:\\Dictionary Learning Dataset"
         self.audio_files = []
         for root, _, files in os.walk(self.directory):
             for file in files:
@@ -33,9 +41,9 @@ class AudioDataset(Dataset):
         audio_path = self.audio_files[idx]
         try:
             waveform, sample_rate = torchaudio.load(audio_path)
-            print(f"File loaded")
+            # print(f"File loaded")
         except Exception as e:
-            print(f"Error loading file: {e}")
+            # print(f"Error loading file: {e}")
             return None
         waveform = convert_audio(waveform, sample_rate)
 
@@ -51,7 +59,8 @@ def safe_collate(batch):
 
 def get_dataloader(bs):
     dataset = AudioDataset()
-    loader = DataLoader(dataset, batch_size=bs, collate_fn=safe_collate, shuffle=True, num_workers=1)
+    # sampler = DistributedSampler(dataset)
+    loader = DataLoader(dataset, batch_size=bs, collate_fn=safe_collate, shuffle=False)
     return loader
 
 
