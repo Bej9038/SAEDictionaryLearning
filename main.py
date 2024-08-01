@@ -55,7 +55,7 @@ class Trainer:
         self.lambda_sparsity = 5
 
         # create LR schedule
-        self.lr = 1e-5
+        self.lr = 1e-6
         self.batch_size = 2
         self.grad_norm = 1
         self.steps = 200000
@@ -102,6 +102,8 @@ class Trainer:
 
                     step += 1
                     pbar.update(1)
+                    if step % 10 == 0:
+                        torch.save(self.sae.state_dict(), 'ckpts/sae.pth')
 
                     if step >= self.steps:
                         break
