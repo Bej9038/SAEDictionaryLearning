@@ -42,6 +42,12 @@ class SparseAutoencoder(nn.Module):
         decoded = self.decoder(encoded)
         return encoded, decoded
 
+    def encode(self, x):
+        return torch.relu(self.encoder(x))
+
+    def decode(self, x):
+        return self.decoder(x)
+
     def compute_loss(self, x, x_hat, fx):
         l2 = self.mse_loss(x, x_hat)
         l1 = self.lambda_sparsity * torch.sum(torch.abs(fx) * torch.norm(self.decoder.weight, dim=0))
@@ -50,14 +56,14 @@ class SparseAutoencoder(nn.Module):
 
 class Trainer:
     def __init__(self, rank):
-        self.device = rank
+        self.device = "cpu"
         self.latent_dim = 12000
         self.features = 2 ** 10
         self.lambda_sparsity = 5
 
         # create LR schedule
         self.lr = 1e-6
-        self.batch_size = 2
+        self.batch_size = 1
         self.grad_norm = 1
         self.steps = 2**12
         self.writer = SummaryWriter()
@@ -111,20 +117,30 @@ class Trainer:
         self.writer.close()
 
     def test(self):
-        for batch in self.dataloader:
-            batch = batch.to(self.device)
+        ckpt = torch.load("ckpts/sae.pth", map_location=torch.device('cpu'))  # or 'cuda' for GPU
+        self.sae.load_state_dict(ckpt)
+        self.sae.eval()
+        with torch.no_grad():
+            for batch in self.dataloader:
+                batch = batch.to(self.device)
 
-            inputs = self.encoder.encode(batch).to(torch.float32)
-            inputs = einops.rearrange(inputs, 'b h w -> b (h w)')
+                # grab original encoder latents
+                latents = self.encoder.encode(batch).to(torch.float32)
+                b, h, w = latents.shape
+                latents = einops.rearrange(latents, 'b h w -> b (h w)')
 
-            # sae
-            encoded, decoded = self.sae(inputs)
+                # grab sae latents
+                encoded = self.sae.encode(latents)
 
-            output = self.encoder.decode(decoded)
+                # edits
 
-            torchaudio.save("test.wav", output, 44100)
+                decoded = self.sae.decode(encoded)
 
-            break
+                new_latents = einops.rearrange(decoded, 'b (h w) -> b h w', h=h, w=w).to(torch.int)
+                # recover audio
+                output = self.encoder.decode(new_latents)
+                torchaudio.save("test.wav", output[0], 44100)
+                break
 
 
 def main(rank, world_size):
