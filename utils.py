@@ -67,8 +67,8 @@ def get_dataloader(bs):
 class CustomLRScheduler(_LRScheduler):
     def __init__(self, optimizer, total_steps, last_epoch=-1):
         self.total_steps = total_steps
-        self.warmup_steps = 1000
-        self.decay_start_step = 40000
+        self.warmup_steps = int(total_steps * .1)
+        self.decay_start_step = int(total_steps * .9)
         super(CustomLRScheduler, self).__init__(optimizer, last_epoch)
 
     def get_lr(self):

@@ -11,6 +11,7 @@ from torch.distributed import destroy_process_group
 import torch.multiprocessing as mp
 from torch.utils.tensorboard import SummaryWriter
 import dac
+import torchaudio
 
 
 class SparseAutoencoder(nn.Module):
@@ -58,7 +59,7 @@ class Trainer:
         self.lr = 1e-6
         self.batch_size = 2
         self.grad_norm = 1
-        self.steps = 200000
+        self.steps = 2**12
         self.writer = SummaryWriter()
 
         self.encoder = AGC.from_pretrained("Audiogen/agc-discrete").to(self.device)
@@ -109,11 +110,28 @@ class Trainer:
                         break
         self.writer.close()
 
+    def test(self):
+        for batch in self.dataloader:
+            batch = batch.to(self.device)
+
+            inputs = self.encoder.encode(batch).to(torch.float32)
+            inputs = einops.rearrange(inputs, 'b h w -> b (h w)')
+
+            # sae
+            encoded, decoded = self.sae(inputs)
+
+            output = self.encoder.decode(decoded)
+
+            torchaudio.save("test.wav", output, 44100)
+
+            break
+
 
 def main(rank, world_size):
     # utils.ddp_setup(rank, world_size)
     trainer = Trainer(rank)
-    trainer.train()
+    # trainer.train()
+    trainer.test()
     # destroy_process_group()
 
 
